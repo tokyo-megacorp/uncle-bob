@@ -1,6 +1,6 @@
 # uncle-bob
 
-A Claude Code plugin that distills Robert C. Martin's canon (SOLID, naming, functions) and uses a layered hook stack to enforce it per turn.
+A Claude Code plugin that distills Robert C. Martin's canon — Clean Code (SOLID, naming, functions) plus opt-in Clean Architecture — and uses a layered hook stack to enforce it per turn.
 
 ## What it does
 
@@ -14,11 +14,18 @@ Before the next user turn, a grade-card is injected via `UserPromptSubmit` — f
 ## Architecture
 
 ```
-SessionStart  → snapshot pre-turn baseline.sha + tip-of-the-day
-PostToolUse   → regex scan Write|Edit → scratch file
+SessionStart     → snapshot pre-turn baseline.sha + tip-of-the-day
+PostToolUse      → regex scan Write|Edit → scratch file
 UserPromptSubmit → inject scratch as grade-card → clear
-Stop          → claude --print (ONLY if Tier-1 clean AND diff > 30 lines)
-PreCompact    → preserve smell summary across compaction
+Stop             → claude --print (ONLY if Tier-1 clean AND diff > 30 lines)
+PreCompact       → preserve smell summary across compaction
+```
+
+Optional (opt-in) Clean Architecture gate:
+
+```
+PreToolUse ExitPlanMode       → review the plan text before plan-mode exits
+PostToolUse Write|Edit (plan/spec paths only) → review the written doc
 ```
 
 ## Prerequisites
@@ -84,12 +91,14 @@ Pending publication — for now, the local-clone path above is the only route.
 ## Configure
 
 ```
-/uncle-bob:setup --status    # current config
-/uncle-bob:setup --disable   # silence all hooks for this install
-/uncle-bob:setup --enable    # re-enable
+/uncle-bob:setup --status                # current config
+/uncle-bob:setup --disable               # silence the code-review stack
+/uncle-bob:setup --enable                # re-enable
+/uncle-bob:setup --enable-plan-review    # turn on the Clean Architecture gate
+/uncle-bob:setup --disable-plan-review   # turn it off (default)
 ```
 
-Config lives at `~/.uncle-bob/config.json`. Shared across projects.
+Config lives at `~/.uncle-bob/config.json`. Shared across projects. The two toggles are independent — you can run code review with plan review off, or vice versa.
 
 ## On-demand review
 
@@ -101,13 +110,33 @@ Config lives at `~/.uncle-bob/config.json`. Shared across projects.
 
 Runs the same two-tier flow. Never blocks. Returns `PASS` or `FAIL` with per-principle hits.
 
-## Canon coverage (v1)
+## Canon coverage
+
+### Clean Code (v1 — always on when enabled)
 
 - **SOLID**: SRP · OCP · LSP · ISP · DIP
 - **Naming**: intention-revealing · searchable · pronounceable · one-word-per-concept
 - **Functions**: small (≤20 LOC) · do one thing · ≤3 args · no flag args · no side effects · CQS
 
-See `hooks/precepts/principles/` for extended references. `hooks/precepts/_summary.md` is the LLM-injected distilled canon.
+Loaded into the Stop-gate LLM via `hooks/precepts/_summary.md`. Extended references in `hooks/precepts/principles/solid.md`, `naming.md`, `functions.md`.
+
+### Clean Architecture (v1 — opt-in via `--enable-plan-review`)
+
+- **Dependency Rule** · layered responsibilities (Entities · Use Cases · Interface Adapters · Frameworks & Drivers)
+- **Boundaries** (Ports & Adapters) · Screaming Architecture
+- **Independence** (framework · database · UI)
+- **Humble Object** · Main Component · Testability as a structural property
+
+Loaded into the plan-review LLM via `hooks/precepts/_architecture.md`. Extended reference in `hooks/precepts/principles/architecture.md`.
+
+## Opt-in: Clean Architecture plan review
+
+When enabled via `/uncle-bob:setup --enable-plan-review`, two hooks gate architectural decisions:
+
+- **`PreToolUse ExitPlanMode`** — before the agent exits plan mode, the hook reads `tool_input.plan`, runs a Clean Architecture review, and blocks the exit if the plan has a Dependency Rule breach or a missing boundary at a critical seam. The agent receives the violation + a concrete structural fix.
+- **`PostToolUse Write|Edit`** — when the agent writes or edits a plan/spec file (paths matching `plans?/`, `specs?/`, `*-plan.md`, `*.spec.md`, `PLAN.md`, or `SPEC.md`), the hook reads the saved content and runs the same review. The file isn't reverted on block — the reason surfaces to the agent so it follows up with a corrective edit.
+
+Posture: prefer ALLOW. Block only on HARD-severity violations (the gate is meant to catch structural errors, not stylistic layering preferences). Verdicts are audited to `~/.uncle-bob/audit.jsonl` alongside the code-review gate.
 
 ## Audit log
 
