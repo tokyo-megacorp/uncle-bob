@@ -29,16 +29,57 @@ PreCompact    → preserve smell summary across compaction
 
 ## Install
 
-### Local dev
-```
-/install-local-plugin ~/Developer/uncle-bob
-/reload-plugins
-```
+### As a directory-source plugin (local clone)
 
-### From marketplace (when published)
-```
-/plugin install uncle-bob
-```
+1. Clone the repo:
+   ```
+   git clone https://github.com/tokyo-megacorp/uncle-bob ~/path/to/uncle-bob
+   ```
+2. Register it as a local marketplace in `~/.claude/settings.json`:
+   ```json
+   {
+     "extraKnownMarketplaces": {
+       "uncle-bob-local": {
+         "source": { "source": "directory", "path": "/absolute/path/to/uncle-bob" }
+       }
+     },
+     "enabledPlugins": {
+       "uncle-bob@uncle-bob-local": true
+     }
+   }
+   ```
+3. Mirror the same marketplace entry in `~/.claude/plugins/known_marketplaces.json` (required — `/reload-plugins` reads this file at resolve time, not `settings.json`):
+   ```json
+   {
+     "uncle-bob-local": {
+       "source": { "source": "directory", "path": "/absolute/path/to/uncle-bob" },
+       "installLocation": "/absolute/path/to/uncle-bob"
+     }
+   }
+   ```
+4. Add the plugin to `~/.claude/plugins/installed_plugins.json` under `plugins`:
+   ```json
+   {
+     "plugins": {
+       "uncle-bob@uncle-bob-local": [{
+         "scope": "user",
+         "installPath": "/Users/<you>/.claude/plugins/cache/uncle-bob-local/uncle-bob/0.1.0",
+         "version": "0.1.0"
+       }]
+     }
+   }
+   ```
+5. Symlink the cache so `/reload-plugins` picks up live edits:
+   ```
+   mkdir -p ~/.claude/plugins/cache/uncle-bob-local/uncle-bob
+   ln -s /absolute/path/to/uncle-bob ~/.claude/plugins/cache/uncle-bob-local/uncle-bob/0.1.0
+   ```
+6. Run `/reload-plugins` in Claude Code. Then restart the session — hooks are snapshotted at startup and won't engage until the next fresh session.
+
+If any of the four state files above is stale or missing, `/reload-plugins` silently skips the plugin.
+
+### From marketplace (not published yet)
+Pending publication — for now, the local-clone path above is the only route.
 
 ## Configure
 
@@ -74,7 +115,7 @@ See `precepts/principles/` for extended references. `precepts/_summary.md` is th
 
 ## Design notes
 
-Why this stack? See the convergence report: `~/.autoimprove/matrix-runs/20260418-170000-uncle-bob-hooks/convergence.json`. The short version:
+Why this stack? See [`docs/design-notes.md`](docs/design-notes.md) for the full reasoning (matrix ranking, rejected alternatives, required mitigations). The short version:
 
 - **Don't double-punish**: if Tier-1 already caught smells, Tier-2 stays quiet. One complaint per turn.
 - **Ghost approval mitigation**: Stop diffs against the SessionStart snapshot, not the working tree (otherwise regex-mutated code would look clean to LLM).
