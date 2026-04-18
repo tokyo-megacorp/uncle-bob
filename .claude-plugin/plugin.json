@@ -1,0 +1,13 @@
+{
+  "name": "uncle-bob",
+  "version": "0.1.0",
+  "description": "Distilled Robert C. Martin canon (SOLID, Clean Code, naming, functions) with a Stop-gate that judges each turn against the canon via claude --print.",
+  "author": {
+    "name": "Pedro Almeida",
+    "url": "https://github.com/ipedro"
+  },
+  "homepage": "https://github.com/tokyo-megacorp/uncle-bob",
+  "repository": "https://github.com/tokyo-megacorp/uncle-bob",
+  "license": "MIT",
+  "keywords": ["clean-code", "solid", "review", "stop-hook", "uncle-bob", "code-quality"]
+}
