@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 const STOP_REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
 const DIFF_LINE_THRESHOLD = 30;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+// hooks/scripts/ → hooks/ → plugin root
 const ROOT_DIR = path.resolve(SCRIPT_DIR, "..", "..");
 const CONFIG_PATH = path.join(process.env.HOME ?? "", ".uncle-bob", "config.json");
 const AUDIT_PATH = path.join(process.env.HOME ?? "", ".uncle-bob", "audit.jsonl");
