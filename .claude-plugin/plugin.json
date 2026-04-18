@@ -1,6 +1,6 @@
 {
   "name": "uncle-bob",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Distilled Robert C. Martin canon — Clean Code (SOLID, naming, functions) via a Stop-gate that judges each turn, plus opt-in Clean Architecture review of plan-mode output and plan/spec files.",
   "author": {
     "name": "Pedro Almeida",
