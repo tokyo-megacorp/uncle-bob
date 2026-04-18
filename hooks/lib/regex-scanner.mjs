@@ -132,6 +132,19 @@ function scanMagicNumbers(content) {
   return findings;
 }
 
+const SOURCE_EXTENSIONS = new Set([
+  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts",
+  ".py", ".go", ".rs", ".java", ".kt", ".swift", ".rb", ".php",
+  ".c", ".cc", ".cpp", ".h", ".hpp", ".m", ".mm", ".cs"
+]);
+
+export function isSourceFile(filePath) {
+  if (!filePath) return false;
+  const dot = filePath.lastIndexOf(".");
+  if (dot === -1) return false;
+  return SOURCE_EXTENSIONS.has(filePath.slice(dot).toLowerCase());
+}
+
 export function scanContent(content, filePath = "<unknown>") {
   if (!content || typeof content !== "string") return [];
   const findings = [
