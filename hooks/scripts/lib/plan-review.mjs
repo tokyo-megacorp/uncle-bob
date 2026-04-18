@@ -64,11 +64,14 @@ export function parseReview(rawOutput) {
 }
 
 // Low-level: spawns claude and returns { stdout, ok, reason } where ok/reason
-// reflect only transport errors (timeout, non-zero exit). Callers parse stdout.
+// reflect only transport errors (ENOENT, timeout, non-zero exit). Callers parse stdout.
 function callClaude(prompt, precepts, cwd) {
   const result = spawnSync("claude", ["--print", "--append-system-prompt", precepts, prompt], {
     cwd, encoding: "utf8", timeout: PLAN_REVIEW_TIMEOUT_MS
   });
+  if (result.error?.code === "ENOENT") {
+    return { ok: false, reason: "Plan review failed: claude CLI not found on PATH. Install it and restart the session." };
+  }
   if (result.error?.code === "ETIMEDOUT") {
     return { ok: false, reason: "Plan review timed out after 15 minutes." };
   }

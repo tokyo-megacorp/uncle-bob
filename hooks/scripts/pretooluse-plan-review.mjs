@@ -21,6 +21,7 @@ function extractPlan(input) {
 
 function main() {
   const config = readConfig();
+  if (config.enabled === false) return;
   if (config.plan_review !== true) return;
   const input = readHookInput();
   if (input.tool_name !== "ExitPlanMode") return;

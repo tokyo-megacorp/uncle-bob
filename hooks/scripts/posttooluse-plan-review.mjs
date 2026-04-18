@@ -49,6 +49,7 @@ function extractAndValidateContent(input, toolName) {
 
 function main() {
   const config = readConfig();
+  if (config.enabled === false) return;
   if (config.plan_review !== true) return;
   const input = readHookInput();
   const toolName = input.tool_name ?? "";

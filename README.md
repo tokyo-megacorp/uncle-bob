@@ -98,7 +98,7 @@ Pending publication — for now, the local-clone path above is the only route.
 /uncle-bob:setup --disable-plan-review   # turn it off (default)
 ```
 
-Config lives at `~/.uncle-bob/config.json`. Shared across projects. The two toggles are independent — you can run code review with plan review off, or vice versa.
+Config lives at `~/.uncle-bob/config.json`. Shared across projects. `--disable` is a master kill switch — it silences every hook including plan review. `--enable-plan-review` only has effect while the plugin is also enabled.
 
 ## On-demand review
 
@@ -134,7 +134,7 @@ Loaded into the plan-review LLM via `hooks/precepts/_architecture.md`. Extended 
 When enabled via `/uncle-bob:setup --enable-plan-review`, two hooks gate architectural decisions:
 
 - **`PreToolUse ExitPlanMode`** — before the agent exits plan mode, the hook reads `tool_input.plan`, runs a Clean Architecture review, and blocks the exit if the plan has a Dependency Rule breach or a missing boundary at a critical seam. The agent receives the violation + a concrete structural fix.
-- **`PostToolUse Write|Edit`** — when the agent writes or edits a plan/spec file (paths matching `plans?/`, `specs?/`, `*-plan.md`, `*.spec.md`, `PLAN.md`, or `SPEC.md`), the hook reads the saved content and runs the same review. The file isn't reverted on block — the reason surfaces to the agent so it follows up with a corrective edit.
+- **`PostToolUse Write|Edit`** — when the agent writes or edits a plan/spec file, the hook reads the saved content and runs the same review. A path qualifies when it lives under a `plans/` or `specs/` directory, ends in one of `-plan.md` / `_plan.md` / `.plan.md` / `-spec.md` / `_spec.md` / `.spec.md`, or is exactly named `PLAN.md` or `SPEC.md`. The file isn't reverted on block — the reason surfaces to the agent so it follows up with a corrective edit.
 
 Posture: prefer ALLOW. Block only on HARD-severity violations (the gate is meant to catch structural errors, not stylistic layering preferences). Verdicts are audited to `~/.uncle-bob/audit.jsonl` alongside the code-review gate.
 
