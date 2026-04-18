@@ -10,6 +10,7 @@ import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { buildClaudeArgs } from "./lib/plan-review.mjs";
 
 const STOP_REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
 const DIFF_LINE_THRESHOLD = 30;
@@ -98,12 +99,32 @@ function parseReview(rawOutput) {
   return { ok: false, reason: `Uncle Bob review returned malformed output. First line: ${firstLine.slice(0, 120)}` };
 }
 
-function runReview(cwd, diff, lastAssistantMessage) {
+function runReview({ cwd, diff, lastAssistantMessage, config, sessionId }) {
   const prompt = buildPrompt(diff, lastAssistantMessage);
   const precepts = loadFile("hooks/precepts/_summary.md");
-  const result = spawnSync("claude", ["--print", "--append-system-prompt", precepts, prompt], {
-    cwd, encoding: "utf8", timeout: STOP_REVIEW_TIMEOUT_MS
-  });
+  const args = [
+    ...buildClaudeArgs(config),
+    "--system-prompt", precepts,
+    prompt,
+  ];
+
+  // Observability: capture stderr of sub-Claude to a live-tailable log file.
+  const logPath = path.join(sessionDir(sessionId), "stop-review.stderr.log");
+  fs.mkdirSync(path.dirname(logPath), { recursive: true });
+  const header = `\n--- started ${new Date().toISOString()} model=${config.model ?? "default"} bare=${config.bare === "on"} prompt_chars=${prompt.length} ---\n`;
+  fs.appendFileSync(logPath, header);
+  const logFd = fs.openSync(logPath, "a");
+
+  let result;
+  try {
+    result = spawnSync("claude", args, {
+      cwd, encoding: "utf8", timeout: STOP_REVIEW_TIMEOUT_MS,
+      stdio: ["ignore", "pipe", logFd],
+    });
+  } finally {
+    try { fs.closeSync(logFd); } catch { /* best effort */ }
+  }
+
   if (result.error?.code === "ETIMEDOUT") {
     return { ok: false, reason: "Uncle Bob review timed out after 15 minutes." };
   }
@@ -124,7 +145,7 @@ function main() {
 
   // Gate 1 — Tier-1 regex already had the floor. Don't double-punish.
   if (tier1HasHits(sessionId)) {
-    appendAudit({ session_id: sessionId, ok: true, reason: "skipped (tier-1 already flagged)" });
+    appendAudit({ session_id: sessionId, phase: "skipped", ok: true, reason: "skipped (tier-1 already flagged)" });
     return;
   }
 
@@ -132,12 +153,28 @@ function main() {
   const diff = turnDiff(cwd, sessionId);
   const diffLines = diff.split(/\r?\n/).length;
   if (diffLines < DIFF_LINE_THRESHOLD) {
-    appendAudit({ session_id: sessionId, ok: true, reason: `skipped (diff ${diffLines} lines < threshold)` });
+    appendAudit({ session_id: sessionId, phase: "skipped", ok: true, reason: `skipped (diff ${diffLines} lines < threshold)` });
     return;
   }
 
-  const review = runReview(cwd, diff, String(input.last_assistant_message ?? "").trim());
-  appendAudit({ session_id: sessionId, cwd, ok: review.ok, reason: review.reason });
+  appendAudit({
+    session_id: sessionId,
+    phase: "started",
+    diff_lines: diffLines,
+    model: config.model ?? "default",
+    bare: config.bare === "on",
+  });
+
+  const tsStart = Date.now();
+  const review = runReview({
+    cwd,
+    diff,
+    lastAssistantMessage: String(input.last_assistant_message ?? "").trim(),
+    config,
+    sessionId,
+  });
+  const elapsedMs = Date.now() - tsStart;
+  appendAudit({ session_id: sessionId, phase: "completed", elapsed_ms: elapsedMs, cwd, ok: review.ok, reason: review.reason });
 
   if (!review.ok) {
     emitDecision({ decision: "block", reason: review.reason });

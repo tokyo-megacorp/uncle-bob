@@ -2,6 +2,7 @@
 // Pure-ish helpers only — no side effects on import. main() lives in each script.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
@@ -63,10 +64,55 @@ export function parseReview(rawOutput) {
   return { ok: false, reason: `Plan review returned malformed output. First line: ${firstLine.slice(0, 120)}` };
 }
 
+// Ensures a stable empty plugin directory exists so --plugin-dir can point at it.
+// Without an empty dir, omitting --plugin-dir lets the CLI auto-discover the user's
+// plugins — which is exactly what adds 60+ seconds of plugin sync on cold start.
+function ensureIsolationPluginDir() {
+  const dir = path.join(os.tmpdir(), "uncle-bob-empty-plugins");
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* best effort */ }
+  return dir;
+}
+
+// Pure-ish (touches /tmp once via ensureIsolationPluginDir): builds the invariant
+// argv prefix for `claude` review spawns.
+// Invariants (always on): --print (one-shot), --no-session-persistence (don't
+// pollute /resume), --tools "" (review is text-in/text-out, no tools needed),
+// --remote-control-session-name-prefix (mark ephemeral reviews in any RC UI),
+// plus isolation flags that prevent the sub-claude from inheriting the user's
+// plugins / MCPs / slash-commands — cold start goes from ~60s to ~5s. Bench
+// evidence in CHANGELOG.
+// Knobs: --bare when config.bare === "on" (routes billing to ANTHROPIC_API_KEY;
+// even more minimal than the isolation flags, at the cost of OAuth). --model <x>
+// when config.model ∈ {opus, sonnet, haiku}; "auto" or any other value means no
+// --model flag (CLI default applies).
+export function buildClaudeArgs(config = {}) {
+  const args = [
+    "--print",
+    "--no-session-persistence",
+    "--tools", "",
+    "--remote-control-session-name-prefix", "uncle-bob-review",
+    "--plugin-dir", ensureIsolationPluginDir(),
+    "--strict-mcp-config",
+    "--mcp-config", '{"mcpServers":{}}',
+    "--disable-slash-commands",
+  ];
+  if (config.bare === "on") args.push("--bare");
+  const { model } = config;
+  if (model === "opus" || model === "sonnet" || model === "haiku") {
+    args.push("--model", model);
+  }
+  return args;
+}
+
 // Low-level: spawns claude and returns { stdout, ok, reason } where ok/reason
 // reflect only transport errors (ENOENT, timeout, non-zero exit). Callers parse stdout.
 function callClaude(prompt, precepts, cwd) {
-  const result = spawnSync("claude", ["--print", "--append-system-prompt", precepts, prompt], {
+  const args = [
+    ...buildClaudeArgs(readConfig()),
+    "--system-prompt", precepts,
+    prompt,
+  ];
+  const result = spawnSync("claude", args, {
     cwd, encoding: "utf8", timeout: PLAN_REVIEW_TIMEOUT_MS
   });
   if (result.error?.code === "ENOENT") {

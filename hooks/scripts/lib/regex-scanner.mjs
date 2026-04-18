@@ -2,7 +2,11 @@
 // Returns array of { principle, line, snippet, why, fix } for any hits found.
 
 const SINGLE_LETTER_NAME = /\b(?:let|const|var|function|class)\s+([a-zA-Z])\s*[=:(]/g;
-const MAGIC_NUMBER = /\b(?<!\.)(?<![\w_])([2-9]|[1-9]\d+)(?:\.\d+)?\b(?!\s*[)}>\]])/g;
+// Lookbehind excludes \w, _, and `-` so identifiers like `gpt-5`, `sha-256`,
+// `claude-4-7`, `http-1`, `es-256` don't trigger. Combined with the in-string
+// heuristic in scanMagicNumbers, this covers the overwhelming majority of
+// model/version/codec names without needing a hardcoded whitelist.
+const MAGIC_NUMBER = /\b(?<!\.)(?<![\w\-])([2-9]|[1-9]\d+)(?:\.\d+)?\b(?!\s*[)}>\]])/g;
 const FLAG_BOOL_ARG = /function\s+\w+\s*\([^)]*\b(?:is|has|should|use|enable|disable)[A-Z]\w*\s*[?:]?\s*boolean/gi;
 const ARITY_OVER_THREE = /function\s+(\w+)\s*\(([^)]*)\)/g;
 const ARROW_ARITY_OVER_THREE = /\b(?:const|let)\s+(\w+)\s*=\s*\(([^)]+)\)\s*=>/g;
@@ -114,6 +118,23 @@ function scanSingleLetterNames(content) {
   return findings;
 }
 
+// Heuristic: a match is inside a string literal if the count of unescaped
+// quote/backtick chars on the same line before the match index is odd.
+// Catches `"gpt-5"`, `'ttl: 30s'`, backtick templates — not perfect for
+// multi-line strings or ${expr} interpolations, but kills the noisiest cases.
+function isInsideStringLiteral(lineText, columnIndex) {
+  const before = lineText.slice(0, columnIndex);
+  const doubles = (before.match(/(?<!\\)"/g) ?? []).length;
+  const singles = (before.match(/(?<!\\)'/g) ?? []).length;
+  const backticks = (before.match(/`/g) ?? []).length;
+  return doubles % 2 === 1 || singles % 2 === 1 || backticks % 2 === 1;
+}
+
+function columnOfMatch(content, index) {
+  const lastNewline = content.lastIndexOf("\n", index - 1);
+  return lastNewline === -1 ? index : index - lastNewline - 1;
+}
+
 function scanMagicNumbers(content) {
   const findings = [];
   for (const m of content.matchAll(MAGIC_NUMBER)) {
@@ -121,6 +142,7 @@ function scanMagicNumbers(content) {
     const lineText = content.split(/\r?\n/)[lineIdx - 1] ?? "";
     if (NOISE_NUMBER_CONTEXTS.test(lineText)) continue;
     if (/^\s*(?:\/\/|\*|\/\*)/.test(lineText)) continue;
+    if (isInsideStringLiteral(lineText, columnOfMatch(content, m.index))) continue;
     findings.push({
       principle: "SearchableNames",
       line: lineIdx,

@@ -96,9 +96,16 @@ Pending publication — for now, the local-clone path above is the only route.
 /uncle-bob:setup --enable                # re-enable
 /uncle-bob:setup --enable-plan-review    # turn on the Clean Architecture gate
 /uncle-bob:setup --disable-plan-review   # turn it off (default)
+/uncle-bob:setup --model sonnet          # auto | opus | sonnet | haiku (default: auto)
+/uncle-bob:setup --bare on               # on | off (default: off)
 ```
 
 Config lives at `~/.uncle-bob/config.json`. Shared across projects. `--disable` is a master kill switch — it silences every hook including plan review. `--enable-plan-review` only has effect while the plugin is also enabled.
+
+**Review spawn tuning**:
+- `--model <auto|opus|sonnet|haiku>` picks which model the review sub-claude uses. `auto` passes no `--model` flag (CLI default applies).
+- `--bare <on|off>` toggles `claude --bare` for review spawns. When `on`, the sub-claude skips plugin sync, CLAUDE.md auto-discovery, keychain, auto-memory, and background prefetches — faster, avoids hook-recursion, and guarantees Remote Control stays off. Trade-off: auth becomes strictly `ANTHROPIC_API_KEY` (OAuth/keychain ignored), so the cost routes to that key instead of your Max subscription. Default `off` to stay on OAuth.
+- Review spawns always pass `--print`, `--no-session-persistence`, `--tools ""`, and `--remote-control-session-name-prefix uncle-bob-review` as invariants.
 
 ## On-demand review
 
@@ -140,7 +147,17 @@ Posture: prefer ALLOW. Block only on HARD-severity violations (the gate is meant
 
 ## Audit log
 
-`~/.uncle-bob/audit.jsonl` — one line per Stop-hook invocation with verdict, reason, session_id, and cwd. Powers future `/uncle-bob:grade`.
+`~/.uncle-bob/audit.jsonl` — one JSONL line per Stop-hook invocation. Each entry includes a `phase` field:
+
+- `skipped` — gate short-circuited before spawning the sub-Claude (tier-1 hit or diff below threshold).
+- `started` — sub-Claude is about to be spawned; includes `diff_lines`, `model`, and `bare`.
+- `completed` — sub-Claude finished; includes `elapsed_ms`, `ok`, `reason`, and `cwd`.
+
+## Observability
+
+Sub-Claude stderr is streamed in real time to `~/.uncle-bob/sessions/<session_id>/stop-review.stderr.log`. Use `tail -f` on that file while a review is running to see plugin-sync noise, auth errors, or any diagnostic output from the sub-process. The log is appended (not truncated) across review runs within the same session.
+
+Powers future `/uncle-bob:grade`.
 
 ## Design notes
 

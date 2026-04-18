@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Added
+- **Stop hook observability** — sub-Claude stderr now streamed in real time to `~/.uncle-bob/sessions/<session_id>/stop-review.stderr.log` (tailable with `tail -f`); audit entries now carry a `phase` field (`started` / `completed` / `skipped`) and `completed` entries include `elapsed_ms` for timing diagnosis.
+
+### Added
+- **Review spawn tuning knobs** — two new config keys controlling how both review tiers (Stop gate + plan review) invoke `claude`:
+  - `model` — `auto` | `opus` | `sonnet` | `haiku`. Default `auto` (no `--model` flag). Invalid values treated as `auto`.
+  - `bare` — `on` | `off`. Default `off`. When `on`, review spawns use `claude --bare` so the sub-claude skips plugin sync, CLAUDE.md auto-discovery, keychain, auto-memory, and background prefetches — faster, avoids uncle-bob invoking itself recursively inside the review sub-session, and guarantees Remote Control stays off. Trade-off: auth becomes strictly `ANTHROPIC_API_KEY` (OAuth/keychain ignored), which is also the intended escape valve for routing review cost to an API key instead of the Max subscription.
+- **Review spawn invariants** — every review call now passes `--no-session-persistence` (don't pollute `/resume`), `--tools ""` (reviews are text-only), and `--remote-control-session-name-prefix uncle-bob-review` (mark ephemeral reviews in any RC UI).
+- `/uncle-bob:setup --model <auto|opus|sonnet|haiku>` and `--bare <on|off>` actions, plus both values in `--status` output.
+- `buildClaudeArgs(config)` exported from `hooks/scripts/lib/plan-review.mjs` — pure helper shared by Stop and plan-review spawns so the argv assembly lives in one place.
+
+### Added
 - **Clean Architecture canon** — `hooks/precepts/_architecture.md` (distilled summary for LLM) + `hooks/precepts/principles/architecture.md` (verbose reference). Covers Dependency Rule, layered responsibilities (Entities / Use Cases / Interface Adapters / Frameworks & Drivers), Boundaries, Screaming Architecture, framework/database/UI Independence, Humble Object, Main Component, and Testability.
 - **Opt-in plan review gate** — two new hooks review plans and specs against the Clean Architecture canon:
   - `PreToolUse ExitPlanMode` → `hooks/scripts/pretooluse-plan-review.mjs` — reviews the plan text before plan-mode exits; blocks on HARD violations.
