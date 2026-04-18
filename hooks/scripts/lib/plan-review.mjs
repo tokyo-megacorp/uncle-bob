@@ -89,3 +89,13 @@ export function runReview(cwd, planContent, blockSuffix) {
   if (!parsed.ok && blockSuffix) return { ...parsed, reason: `${parsed.reason} ${blockSuffix}` };
   return parsed;
 }
+
+// Writes the audit entry then emits the right signal: block on failure, note on success.
+export function reportReviewOutcome(review, auditBase) {
+  appendAudit({ ...auditBase, ok: review.ok, reason: review.reason });
+  if (!review.ok) {
+    emitDecision({ decision: "block", reason: review.reason });
+    return;
+  }
+  logNote(review.reason);
+}

@@ -8,11 +8,10 @@ import fs from "node:fs";
 import process from "node:process";
 import {
   readHookInput,
-  emitDecision,
-  logNote,
   readConfig,
   appendAudit,
   runReview,
+  reportReviewOutcome,
 } from "./lib/plan-review.mjs";
 
 const BLOCK_SUFFIX = "Edit the file to resolve the structural violation above.";
@@ -51,24 +50,20 @@ function extractAndValidateContent(input, toolName) {
 function main() {
   const config = readConfig();
   if (config.plan_review !== true) return;
-
   const input = readHookInput();
   const toolName = input.tool_name ?? "";
   if (!isPlanSpecTarget(input, toolName)) return;
-
   const filePath = input.tool_input?.file_path ?? "";
+  const sessionId = input.session_id ?? "_default";
+  const auditBase = { hook: "posttooluse-plan-review", session_id: sessionId, path: filePath };
   const content = extractAndValidateContent(input, toolName);
   if (content === null) {
-    appendAudit({ hook: "posttooluse-plan-review", session_id: input.session_id, path: filePath, ok: true, reason: "empty content — skipped" });
+    appendAudit({ ...auditBase, ok: true, reason: "empty content — skipped" });
     return;
   }
-
   const cwd = input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
   const review = runReview(cwd, content, BLOCK_SUFFIX);
-  appendAudit({ hook: "posttooluse-plan-review", session_id: input.session_id ?? "_default", path: filePath, ok: review.ok, reason: review.reason });
-
-  if (!review.ok) { emitDecision({ decision: "block", reason: review.reason }); return; }
-  logNote(review.reason);
+  reportReviewOutcome(review, auditBase);
 }
 
 try {

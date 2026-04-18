@@ -7,11 +7,10 @@
 import process from "node:process";
 import {
   readHookInput,
-  emitDecision,
-  logNote,
   readConfig,
   appendAudit,
   runReview,
+  reportReviewOutcome,
 } from "./lib/plan-review.mjs";
 
 const BLOCK_SUFFIX = "Revise the plan and re-exit plan mode.";
@@ -23,27 +22,18 @@ function extractPlan(input) {
 function main() {
   const config = readConfig();
   if (config.plan_review !== true) return;
-
   const input = readHookInput();
   if (input.tool_name !== "ExitPlanMode") return;
-
+  const sessionId = input.session_id ?? "_default";
+  const auditBase = { hook: "pretooluse-plan-review", session_id: sessionId };
   const planContent = extractPlan(input);
   if (!planContent) {
-    appendAudit({ hook: "pretooluse-plan-review", session_id: input.session_id, ok: true, reason: "empty plan — skipped" });
+    appendAudit({ ...auditBase, ok: true, reason: "empty plan — skipped" });
     return;
   }
-
   const cwd = input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
-  const sessionId = input.session_id ?? "_default";
-
   const review = runReview(cwd, planContent, BLOCK_SUFFIX);
-  appendAudit({ hook: "pretooluse-plan-review", session_id: sessionId, ok: review.ok, reason: review.reason });
-
-  if (!review.ok) {
-    emitDecision({ decision: "block", reason: review.reason });
-    return;
-  }
-  logNote(review.reason);
+  reportReviewOutcome(review, auditBase);
 }
 
 try {
