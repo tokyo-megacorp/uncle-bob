@@ -34,23 +34,32 @@ function readPostEditContent(toolInput, toolName) {
   catch { return ""; }
 }
 
+// Returns the file content string if this event warrants a review, or null to skip.
+// Skips when: tool is not Write/Edit, path is not a plan/spec, file is unreadable,
+// or content is blank (blank = audit-logged and skipped).
+function extractAndValidateContent(input, toolName) {
+  if (!["Write", "Edit"].includes(toolName)) return null;
+
+  const filePath = input.tool_input?.file_path ?? "";
+  if (!isPlanSpecPath(filePath)) return null;
+
+  const content = readPostEditContent(input.tool_input ?? {}, toolName);
+  if (!content.trim()) {
+    appendAudit({ hook: "posttooluse-plan-review", session_id: input.session_id, path: filePath, ok: true, reason: "empty content — skipped" });
+    return null;
+  }
+  return content;
+}
+
 function main() {
   const config = readConfig();
   if (config.plan_review !== true) return;
 
   const input = readHookInput();
-  const toolName = input.tool_name ?? "";
-  if (!["Write", "Edit"].includes(toolName)) return;
+  const content = extractAndValidateContent(input, input.tool_name ?? "");
+  if (content === null) return;
 
   const filePath = input.tool_input?.file_path ?? "";
-  if (!isPlanSpecPath(filePath)) return;
-
-  const content = readPostEditContent(input.tool_input ?? {}, toolName);
-  if (!content.trim()) {
-    appendAudit({ hook: "posttooluse-plan-review", session_id: input.session_id, path: filePath, ok: true, reason: "empty content — skipped" });
-    return;
-  }
-
   const cwd = input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
   const sessionId = input.session_id ?? "_default";
 
