@@ -43,8 +43,9 @@ async function main() {
   const { content, file } = pickContent(input.tool_input ?? {}, toolName);
   if (!content) return;
 
-  const { scanContent } = await loadScanner();
-  const findings = scanContent(content, file ?? "<unknown>");
+  const { scanContent, isSourceFile } = await loadScanner();
+  if (!file || !isSourceFile(file)) return;
+  const findings = scanContent(content, file);
   if (!findings.length) return;
 
   const scratch = scratchPathFor(input.session_id ?? "_default");
