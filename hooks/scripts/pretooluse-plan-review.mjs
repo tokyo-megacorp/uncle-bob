@@ -14,6 +14,8 @@ import {
   runReview,
 } from "./lib/plan-review.mjs";
 
+const BLOCK_SUFFIX = "Revise the plan and re-exit plan mode.";
+
 function extractPlan(input) {
   return String(input.tool_input?.plan ?? "").trim();
 }
@@ -34,7 +36,7 @@ function main() {
   const cwd = input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
   const sessionId = input.session_id ?? "_default";
 
-  const review = runReview(cwd, planContent);
+  const review = runReview(cwd, planContent, BLOCK_SUFFIX);
   appendAudit({ hook: "pretooluse-plan-review", session_id: sessionId, ok: review.ok, reason: review.reason });
 
   if (!review.ok) {
@@ -44,4 +46,12 @@ function main() {
   logNote(review.reason);
 }
 
-main();
+try {
+  main();
+} catch (err) {
+  process.stdout.write(JSON.stringify({
+    decision: "block",
+    reason: `uncle-bob plan review hook crashed: ${err?.message ?? err}. Check plugin install.`
+  }) + "\n");
+  process.exit(0);
+}

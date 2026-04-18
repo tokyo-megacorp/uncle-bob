@@ -15,6 +15,8 @@ import {
   runReview,
 } from "./lib/plan-review.mjs";
 
+const BLOCK_SUFFIX = "Edit the file to resolve the structural violation above.";
+
 const PLAN_SPEC_PATTERNS = [
   /(^|\/)plans?\//i,
   /(^|\/)specs?\//i,
@@ -28,27 +30,22 @@ function isPlanSpecPath(filePath) {
   return PLAN_SPEC_PATTERNS.some(re => re.test(normalized));
 }
 
+// Pure predicate: true when this hook event targets a plan/spec file.
+function isPlanSpecTarget(input, toolName) {
+  if (!["Write", "Edit"].includes(toolName)) return false;
+  return isPlanSpecPath(input.tool_input?.file_path ?? "");
+}
+
 function readPostEditContent(toolInput, toolName) {
   if (toolName === "Write") return toolInput.content ?? "";
   try { return fs.readFileSync(toolInput.file_path, "utf8"); }
   catch { return ""; }
 }
 
-// Returns the file content string if this event warrants a review, or null to skip.
-// Skips when: tool is not Write/Edit, path is not a plan/spec, file is unreadable,
-// or content is blank (blank = audit-logged and skipped).
+// Pure query: returns content string if reviewable, null if blank/unreadable.
 function extractAndValidateContent(input, toolName) {
-  if (!["Write", "Edit"].includes(toolName)) return null;
-
-  const filePath = input.tool_input?.file_path ?? "";
-  if (!isPlanSpecPath(filePath)) return null;
-
   const content = readPostEditContent(input.tool_input ?? {}, toolName);
-  if (!content.trim()) {
-    appendAudit({ hook: "posttooluse-plan-review", session_id: input.session_id, path: filePath, ok: true, reason: "empty content — skipped" });
-    return null;
-  }
-  return content;
+  return content.trim() ? content : null;
 }
 
 function main() {
@@ -56,21 +53,30 @@ function main() {
   if (config.plan_review !== true) return;
 
   const input = readHookInput();
-  const content = extractAndValidateContent(input, input.tool_name ?? "");
-  if (content === null) return;
+  const toolName = input.tool_name ?? "";
+  if (!isPlanSpecTarget(input, toolName)) return;
 
   const filePath = input.tool_input?.file_path ?? "";
-  const cwd = input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
-  const sessionId = input.session_id ?? "_default";
-
-  const review = runReview(cwd, content);
-  appendAudit({ hook: "posttooluse-plan-review", session_id: sessionId, path: filePath, ok: review.ok, reason: review.reason });
-
-  if (!review.ok) {
-    emitDecision({ decision: "block", reason: review.reason });
+  const content = extractAndValidateContent(input, toolName);
+  if (content === null) {
+    appendAudit({ hook: "posttooluse-plan-review", session_id: input.session_id, path: filePath, ok: true, reason: "empty content — skipped" });
     return;
   }
+
+  const cwd = input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+  const review = runReview(cwd, content, BLOCK_SUFFIX);
+  appendAudit({ hook: "posttooluse-plan-review", session_id: input.session_id ?? "_default", path: filePath, ok: review.ok, reason: review.reason });
+
+  if (!review.ok) { emitDecision({ decision: "block", reason: review.reason }); return; }
   logNote(review.reason);
 }
 
-main();
+try {
+  main();
+} catch (err) {
+  process.stdout.write(JSON.stringify({
+    decision: "block",
+    reason: `uncle-bob plan review hook crashed: ${err?.message ?? err}. Check plugin install.`
+  }) + "\n");
+  process.exit(0);
+}

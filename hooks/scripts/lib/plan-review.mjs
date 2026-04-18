@@ -52,23 +52,20 @@ export function buildPrompt(planContent) {
   return template.replace("{{PLAN_CONTENT_BLOCK}}", planContent);
 }
 
+// Returns the raw first line of output with no suffix — callers compose the
+// context-appropriate suffix (PreToolUse vs PostToolUse wording differs).
 export function parseReview(rawOutput) {
   const text = String(rawOutput ?? "").trim();
   if (!text) return { ok: false, reason: "Plan review returned no output." };
   const firstLine = text.split(/\r?\n/, 1)[0].trim();
   if (firstLine.startsWith("ALLOW:")) return { ok: true, reason: firstLine };
-  if (firstLine.startsWith("BLOCK:")) {
-    return {
-      ok: false,
-      reason: `${firstLine} — Fix the architectural issue in the plan before proceeding.`
-    };
-  }
+  if (firstLine.startsWith("BLOCK:")) return { ok: false, reason: firstLine };
   return { ok: false, reason: `Plan review returned malformed output. First line: ${firstLine.slice(0, 120)}` };
 }
 
-export function runReview(cwd, planContent) {
-  const prompt = buildPrompt(planContent);
-  const precepts = loadFile("hooks/precepts/_architecture.md");
+// Low-level: spawns claude and returns { stdout, ok, reason } where ok/reason
+// reflect only transport errors (timeout, non-zero exit). Callers parse stdout.
+function callClaude(prompt, precepts, cwd) {
   const result = spawnSync("claude", ["--print", "--append-system-prompt", precepts, prompt], {
     cwd, encoding: "utf8", timeout: PLAN_REVIEW_TIMEOUT_MS
   });
@@ -79,5 +76,16 @@ export function runReview(cwd, planContent) {
     const detail = String(result.stderr || result.stdout || "").trim().slice(0, 200);
     return { ok: false, reason: detail ? `Plan review failed: ${detail}` : "Plan review failed with no output." };
   }
-  return parseReview(result.stdout);
+  return { ok: true, stdout: result.stdout };
+}
+
+// Orchestrates: build prompt → call claude → parse result → append blockSuffix on BLOCK.
+export function runReview(cwd, planContent, blockSuffix) {
+  const prompt = buildPrompt(planContent);
+  const precepts = loadFile("hooks/precepts/_architecture.md");
+  const claude = callClaude(prompt, precepts, cwd);
+  if (!claude.ok) return claude;
+  const parsed = parseReview(claude.stdout);
+  if (!parsed.ok && blockSuffix) return { ...parsed, reason: `${parsed.reason} ${blockSuffix}` };
+  return parsed;
 }
