@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isSourceFile, scanContent } from "../hooks/lib/regex-scanner.mjs";
+import { isSourceFile, scanContent } from "../hooks/scripts/lib/regex-scanner.mjs";
 
 test("isSourceFile: .json returns false", () => {
   assert.equal(isSourceFile("/path/to/foo.json"), false);

@@ -9,7 +9,7 @@ Run the uncle-bob canon review against `$ARGUMENTS` without waiting for Stop.
 ## Targets
 
 ### `<path>` (a file or directory)
-Read the target via `Read`. Invoke `node ${CLAUDE_PLUGIN_ROOT}/hooks/lib/regex-scanner.mjs` on the content for Tier-1 auto-detectables. If none found, call `claude --print` with `precepts/_summary.md` as `--append-system-prompt` + the file content for Tier-2 semantic check.
+Read the target via `Read`. Invoke `node ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/lib/regex-scanner.mjs` on the content for Tier-1 auto-detectables. If none found, call `claude --print` with `hooks/precepts/_summary.md` as `--append-system-prompt` + the file content for Tier-2 semantic check.
 
 ### `--staged`
 `git diff --cached` to capture the staged diff. Review with the same two-tier flow.

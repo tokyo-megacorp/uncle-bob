@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const STOP_REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
 const DIFF_LINE_THRESHOLD = 30;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(SCRIPT_DIR, "..");
+const ROOT_DIR = path.resolve(SCRIPT_DIR, "..", "..");
 const CONFIG_PATH = path.join(process.env.HOME ?? "", ".uncle-bob", "config.json");
 const AUDIT_PATH = path.join(process.env.HOME ?? "", ".uncle-bob", "audit.jsonl");
 
@@ -75,7 +75,7 @@ function tier1HasHits(sessionId) {
 }
 
 function buildPrompt(diff, lastAssistantMessage) {
-  const template = loadFile("prompts/stop-review-gate.md");
+  const template = loadFile("hooks/prompts/stop-review-gate.md");
   const block = [
     lastAssistantMessage ? `Previous Claude response:\n${lastAssistantMessage}` : "",
     diff ? `\nTurn diff (against pre-turn baseline):\n\`\`\`diff\n${diff.slice(0, 12000)}\n\`\`\`` : ""
@@ -99,7 +99,7 @@ function parseReview(rawOutput) {
 
 function runReview(cwd, diff, lastAssistantMessage) {
   const prompt = buildPrompt(diff, lastAssistantMessage);
-  const precepts = loadFile("precepts/_summary.md");
+  const precepts = loadFile("hooks/precepts/_summary.md");
   const result = spawnSync("claude", ["--print", "--append-system-prompt", precepts, prompt], {
     cwd, encoding: "utf8", timeout: STOP_REVIEW_TIMEOUT_MS
   });

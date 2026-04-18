@@ -107,7 +107,7 @@ Runs the same two-tier flow. Never blocks. Returns `PASS` or `FAIL` with per-pri
 - **Naming**: intention-revealing · searchable · pronounceable · one-word-per-concept
 - **Functions**: small (≤20 LOC) · do one thing · ≤3 args · no flag args · no side effects · CQS
 
-See `precepts/principles/` for extended references. `precepts/_summary.md` is the LLM-injected distilled canon.
+See `hooks/precepts/principles/` for extended references. `hooks/precepts/_summary.md` is the LLM-injected distilled canon.
 
 ## Audit log
 
