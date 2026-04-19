@@ -56,15 +56,21 @@ function appendAudit(entry) {
   } catch { /* best effort */ }
 }
 
+function findLastCompletedEntry(lines, sessionId) {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const entry = JSON.parse(lines[i]);
+      if (entry.session_id === sessionId && entry.phase === "completed") return entry;
+    } catch { /* skip malformed line */ }
+  }
+  return null;
+}
+
 function lastCompletedMs(sessionId) {
   try {
     const lines = fs.readFileSync(AUDIT_PATH, "utf8").trim().split("\n");
-    for (let i = lines.length - 1; i >= 0; i--) {
-      try {
-        const entry = JSON.parse(lines[i]);
-        if (entry.session_id === sessionId && entry.phase === "completed") return new Date(entry.ts).getTime();
-      } catch { /* skip */ }
-    }
+    const entry = findLastCompletedEntry(lines, sessionId);
+    return entry ? new Date(entry.ts).getTime() : 0;
   } catch { /* no file */ }
   return 0;
 }
