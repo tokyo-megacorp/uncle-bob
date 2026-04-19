@@ -14,6 +14,7 @@ import { buildClaudeArgs } from "./lib/plan-review.mjs";
 
 const STOP_REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
 const DIFF_LINE_THRESHOLD = 30;
+const COOLDOWN_MS = 60_000;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 // hooks/scripts/ → hooks/ → plugin root
 const ROOT_DIR = path.resolve(SCRIPT_DIR, "..", "..");
@@ -52,6 +53,19 @@ function appendAudit(entry) {
     fs.mkdirSync(path.dirname(AUDIT_PATH), { recursive: true });
     fs.appendFileSync(AUDIT_PATH, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n");
   } catch { /* best effort */ }
+}
+
+function lastCompletedMs(sessionId) {
+  try {
+    const lines = fs.readFileSync(AUDIT_PATH, "utf8").trim().split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const e = JSON.parse(lines[i]);
+        if (e.session_id === sessionId && e.phase === "completed") return new Date(e.ts).getTime();
+      } catch { /* skip */ }
+    }
+  } catch { /* no file */ }
+  return 0;
 }
 
 function loadFile(relative) {
@@ -149,8 +163,18 @@ function main() {
   const cwd = input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
   const sessionId = input.session_id ?? "_default";
 
-  // No heuristic gates — review every turn.
   const diff = turnDiff(cwd, sessionId);
+  const diffLines = diff.split(/\r?\n/).filter(l => l.startsWith("+") || l.startsWith("-")).length;
+  if (diffLines < DIFF_LINE_THRESHOLD) {
+    appendAudit({ session_id: sessionId, phase: "skipped", reason: `diff ${diffLines} lines < threshold` });
+    return;
+  }
+
+  const cooldownRemaining = COOLDOWN_MS - (Date.now() - lastCompletedMs(sessionId));
+  if (cooldownRemaining > 0) {
+    appendAudit({ session_id: sessionId, phase: "skipped", reason: `cooldown ${Math.ceil(cooldownRemaining / 1000)}s remaining` });
+    return;
+  }
 
   appendAudit({
     session_id: sessionId,
@@ -160,6 +184,14 @@ function main() {
   });
 
   const tsStart = Date.now();
+  let reviewCompleted = false;
+  const killHandler = () => {
+    if (!reviewCompleted) {
+      appendAudit({ session_id: sessionId, phase: "killed", elapsed_ms: Date.now() - tsStart });
+    }
+  };
+  process.once("SIGTERM", killHandler);
+  process.once("SIGINT", killHandler);
   const review = runReview({
     cwd,
     diff,
@@ -167,6 +199,9 @@ function main() {
     config,
     sessionId,
   });
+  reviewCompleted = true;
+  process.removeListener("SIGTERM", killHandler);
+  process.removeListener("SIGINT", killHandler);
   const elapsedMs = Date.now() - tsStart;
   appendAudit({ session_id: sessionId, phase: "completed", elapsed_ms: elapsedMs, cwd, ok: review.ok, reason: review.reason });
 
