@@ -43,12 +43,7 @@ function main() {
   const input = readHookInput();
   const summary = summarise(readSessionEntries(input.session_id ?? "_default"));
   if (!summary) return;
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: "PreCompact",
-      additionalContext: summary
-    }
-  }) + "\n");
+  process.stdout.write(JSON.stringify({ systemMessage: summary }) + "\n");
 }
 
 main();
