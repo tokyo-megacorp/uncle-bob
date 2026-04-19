@@ -15,6 +15,7 @@ import { buildClaudeArgs } from "./lib/plan-review.mjs";
 const STOP_REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
 const DIFF_LINE_THRESHOLD = 30;
 const COOLDOWN_MS = 60_000;
+const MS_PER_SECOND = 1000;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 // hooks/scripts/ → hooks/ → plugin root
 const ROOT_DIR = path.resolve(SCRIPT_DIR, "..", "..");
@@ -60,8 +61,8 @@ function lastCompletedMs(sessionId) {
     const lines = fs.readFileSync(AUDIT_PATH, "utf8").trim().split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
       try {
-        const e = JSON.parse(lines[i]);
-        if (e.session_id === sessionId && e.phase === "completed") return new Date(e.ts).getTime();
+        const entry = JSON.parse(lines[i]);
+        if (entry.session_id === sessionId && entry.phase === "completed") return new Date(entry.ts).getTime();
       } catch { /* skip */ }
     }
   } catch { /* no file */ }
@@ -172,7 +173,7 @@ function main() {
 
   const cooldownRemaining = COOLDOWN_MS - (Date.now() - lastCompletedMs(sessionId));
   if (cooldownRemaining > 0) {
-    appendAudit({ session_id: sessionId, phase: "skipped", reason: `cooldown ${Math.ceil(cooldownRemaining / 1000)}s remaining` });
+    appendAudit({ session_id: sessionId, phase: "skipped", reason: `cooldown ${Math.ceil(cooldownRemaining / MS_PER_SECOND)}s remaining` });
     return;
   }
 
