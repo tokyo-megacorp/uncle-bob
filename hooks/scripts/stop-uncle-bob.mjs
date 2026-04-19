@@ -41,6 +41,12 @@ function readConfig() {
   catch { return { enabled: true }; }
 }
 
+function isEnabled(config) {
+  if (process.env.UNCLE_BOB_ENABLED === "1") return true;
+  if (process.env.UNCLE_BOB_ENABLED === "0") return false;
+  return !!config.enabled;
+}
+
 function appendAudit(entry) {
   try {
     fs.mkdirSync(path.dirname(AUDIT_PATH), { recursive: true });
@@ -137,30 +143,18 @@ function runReview({ cwd, diff, lastAssistantMessage, config, sessionId }) {
 
 function main() {
   const config = readConfig();
-  if (!config.enabled) return;
+  if (!isEnabled(config)) return;
 
   const input = readHookInput();
   const cwd = input.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
   const sessionId = input.session_id ?? "_default";
 
-  // Gate 1 — Tier-1 regex already had the floor. Don't double-punish.
-  if (tier1HasHits(sessionId)) {
-    appendAudit({ session_id: sessionId, phase: "skipped", ok: true, reason: "skipped (tier-1 already flagged)" });
-    return;
-  }
-
-  // Gate 2 — diff size threshold. Tiny turns don't earn the LLM cost.
+  // No heuristic gates — review every turn.
   const diff = turnDiff(cwd, sessionId);
-  const diffLines = diff.split(/\r?\n/).length;
-  if (diffLines < DIFF_LINE_THRESHOLD) {
-    appendAudit({ session_id: sessionId, phase: "skipped", ok: true, reason: `skipped (diff ${diffLines} lines < threshold)` });
-    return;
-  }
 
   appendAudit({
     session_id: sessionId,
     phase: "started",
-    diff_lines: diffLines,
     model: config.model ?? "default",
     bare: config.bare === "on",
   });
