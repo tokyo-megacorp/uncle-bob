@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0] — 2026-04-20 — grade command + semantic Tier-2
+
+### Added
+- `/uncle-bob:grade` — static audit analytics (pass rate, skip rate, avg elapsed, recent fails). Scoped to current project by `cwd`; `--all` for global aggregate.
+- `~/.uncle-bob/smell-ledger.jsonl` — persistent Tier-1 smell history. UserPromptSubmit now appends findings before clearing scratch, enabling per-principle breakdown in `/grade`.
+
+### Fixed
+- `fix(grade)`: default scope by `cwd` — multi-project users no longer get mixed-session stats.
+- `fix(stop-hook)`: `readTier1Findings` moved before `appendAudit` — ReferenceError on startup.
+
+### Changed
+- **Tier-2 redesign (B+C):** Stop hook always runs when diff > threshold. Prompt rewritten to focus exclusively on semantic/architectural violations (SRP, OCP, LSP, ISP, DIP, CQS). When Tier-1 found smells, they are injected as `<tier1_already_caught>` context so LLM never re-flags what regex already caught. Worst-quality turns no longer escape semantic review.
+- Removed dead `tier1HasHits()` — Tier-2 is now fully independent of Tier-1 results.
+- Audit `started` entries now include `tier1_hits` count for observability.
+
 ## [0.2.1] — 2026-04-20 — env-var override + stop-hook burst fix
 
 ### Added
