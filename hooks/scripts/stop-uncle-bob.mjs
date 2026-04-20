@@ -97,19 +97,35 @@ function turnDiff(cwd, sessionId) {
   return [since.stdout ?? "", dirty.stdout ?? ""].join("\n").trim();
 }
 
-function tier1HasHits(sessionId) {
+function readTier1Findings(sessionId) {
   const scratch = path.join(sessionDir(sessionId), "grade-card.jsonl");
-  if (!fs.existsSync(scratch)) return false;
-  return fs.readFileSync(scratch, "utf8").trim().length > 0;
+  if (!fs.existsSync(scratch)) return [];
+  return fs.readFileSync(scratch, "utf8").trim().split(/\r?\n/).filter(Boolean).map(l => {
+    try { return JSON.parse(l); } catch { return null; }
+  }).filter(Boolean);
 }
 
-function buildPrompt(diff, lastAssistantMessage) {
+function buildTier1Context(findings) {
+  if (!findings.length) return "";
+  const lines = findings.slice(0, 10).map(f => `- ${f.principle} at ${f.file}:${f.line} — ${f.why}`);
+  return [
+    "<tier1_already_caught>",
+    "The regex scanner already flagged these mechanical smells this turn — do NOT re-flag them:",
+    ...lines,
+    "Focus your review exclusively on semantic/architectural violations not listed above.",
+    "</tier1_already_caught>"
+  ].join("\n");
+}
+
+function buildPrompt(diff, lastAssistantMessage, tier1Findings) {
   const template = loadFile("hooks/prompts/stop-review-gate.md");
   const block = [
     lastAssistantMessage ? `Previous Claude response:\n${lastAssistantMessage}` : "",
     diff ? `\nTurn diff (against pre-turn baseline):\n\`\`\`diff\n${diff.slice(0, 12000)}\n\`\`\`` : ""
   ].filter(Boolean).join("\n");
-  return template.replace("{{CLAUDE_RESPONSE_BLOCK}}", block);
+  return template
+    .replace("{{TIER1_CONTEXT}}", buildTier1Context(tier1Findings))
+    .replace("{{CLAUDE_RESPONSE_BLOCK}}", block);
 }
 
 function parseReview(rawOutput) {
@@ -126,8 +142,8 @@ function parseReview(rawOutput) {
   return { ok: false, reason: `Uncle Bob review returned malformed output. First line: ${firstLine.slice(0, 120)}` };
 }
 
-function runReview({ cwd, diff, lastAssistantMessage, config, sessionId }) {
-  const prompt = buildPrompt(diff, lastAssistantMessage);
+function runReview({ cwd, diff, lastAssistantMessage, tier1Findings, config, sessionId }) {
+  const prompt = buildPrompt(diff, lastAssistantMessage, tier1Findings);
   const precepts = loadFile("hooks/precepts/_summary.md");
   const args = [
     ...buildClaudeArgs(config),
@@ -188,6 +204,7 @@ function main() {
     phase: "started",
     model: config.model ?? "default",
     bare: config.bare === "on",
+    tier1_hits: tier1Findings.length,
   });
 
   const tsStart = Date.now();
@@ -199,10 +216,12 @@ function main() {
   };
   process.once("SIGTERM", killHandler);
   process.once("SIGINT", killHandler);
+  const tier1Findings = readTier1Findings(sessionId);
   const review = runReview({
     cwd,
     diff,
     lastAssistantMessage: String(input.last_assistant_message ?? "").trim(),
+    tier1Findings,
     config,
     sessionId,
   });
