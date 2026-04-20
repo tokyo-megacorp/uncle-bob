@@ -199,6 +199,7 @@ function main() {
     return;
   }
 
+  const tier1Findings = readTier1Findings(sessionId);
   appendAudit({
     session_id: sessionId,
     phase: "started",
@@ -216,7 +217,6 @@ function main() {
   };
   process.once("SIGTERM", killHandler);
   process.once("SIGINT", killHandler);
-  const tier1Findings = readTier1Findings(sessionId);
   const review = runReview({
     cwd,
     diff,
