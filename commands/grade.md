@@ -1,6 +1,6 @@
 ---
 description: Show canon-review grade report — pass rate, skip rate, avg elapsed, recent fail reasons. Reads ~/.uncle-bob/audit.jsonl.
-argument-hint: "[--all]"
+argument-hint: "[--all | --session]"
 allowed-tools: Bash(node:*), Bash(test:*)
 ---
 
@@ -23,7 +23,7 @@ Run a few sessions with the plugin enabled, then try again.
 
 Stop here.
 
-**2.** Run this Node.js script to parse the audit log. Pass `--all` when `$ARGUMENTS` contains `--all`:
+**2.** Run this Node.js script to parse the audit log:
 
 ```bash
 node -e "
@@ -31,17 +31,30 @@ const fs = require('fs');
 const path = process.env.HOME + '/.uncle-bob/audit.jsonl';
 const lines = fs.readFileSync(path, 'utf8').trim().split(/\r?\n/).filter(Boolean);
 const entries = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-const all = process.argv.includes('--all');
+const args = process.argv.slice(1);
+const all     = args.includes('--all');
+const session = args.includes('--session');
 
 let scope, filtered;
 if (all) {
   scope = 'all sessions';
   filtered = entries;
-} else {
+} else if (session) {
   const last = entries[entries.length - 1];
   const sid = last?.session_id;
   scope = sid ? ('session ' + sid.slice(0, 8)) : 'latest session';
   filtered = sid ? entries.filter(e => e.session_id === sid) : entries;
+} else {
+  const cwd = process.cwd();
+  filtered = entries.filter(e => e.cwd && e.cwd.startsWith(cwd));
+  scope = cwd.replace(process.env.HOME, '~');
+  if (!filtered.length) {
+    // fallback: latest session if cwd matches nothing
+    const last = entries[entries.length - 1];
+    const sid = last?.session_id;
+    scope = (sid ? 'session ' + sid.slice(0, 8) : 'latest session') + ' (no cwd match)';
+    filtered = sid ? entries.filter(e => e.session_id === sid) : entries;
+  }
 }
 
 const completed = filtered.filter(e => e.phase === 'completed');
@@ -84,10 +97,13 @@ If `recentFails` is empty, print `  (none — clean session)` instead.
 ## Flags
 
 ### (no argument)
-Scope to the **most recent session** — the `session_id` of the last entry in audit.jsonl.
+Default: filter by **current working directory** (`cwd` field in audit entries) — shows only reviews from this project, across all sessions. Falls back to latest session if no `cwd` match found.
+
+### `--session`
+Scope to the **most recent session** only (last `session_id` in audit.jsonl).
 
 ### `--all`
-Aggregate across **all sessions** in audit.jsonl.
+Aggregate across **all projects and sessions** in audit.jsonl.
 
 ## Notes
 
