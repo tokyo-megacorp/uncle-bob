@@ -118,6 +118,31 @@ Config lives at `~/.uncle-bob/config.json`. Shared across projects. `--disable` 
 
 Runs the same two-tier flow. Never blocks. Returns `PASS` or `FAIL` with per-principle hits.
 
+## Grade report
+
+```
+/uncle-bob:grade             # stats for the current session
+/uncle-bob:grade --all       # aggregate across all sessions
+```
+
+Reads `~/.uncle-bob/audit.jsonl` and prints a compact report:
+
+```
+uncle-bob grade — session a1b2c3d4
+─────────────────────────────────────
+Stop-hook invocations:  14
+  LLM reviews:          6  (5 pass / 1 fail)
+  Tier-1 skips:         8
+Pass rate:              83%
+Skip rate:              57%
+Avg review time:        4312ms
+
+Recent FAILs (last ≤5):
+  1. SRP violation — UserController handles both auth and profile update
+```
+
+Zero LLM cost — pure static aggregation of the audit log.
+
 ## Canon coverage
 
 ### Clean Code (v1 — always on when enabled)
