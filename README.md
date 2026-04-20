@@ -70,8 +70,8 @@ PostToolUse Write|Edit (plan/spec paths only) → review the written doc
      "plugins": {
        "uncle-bob@uncle-bob-local": [{
          "scope": "user",
-         "installPath": "/Users/<you>/.claude/plugins/cache/uncle-bob-local/uncle-bob/0.1.0",
-         "version": "0.1.0"
+         "installPath": "/Users/<you>/.claude/plugins/cache/uncle-bob-local/uncle-bob/0.2.1",
+         "version": "0.2.1"
        }]
      }
    }
@@ -79,14 +79,15 @@ PostToolUse Write|Edit (plan/spec paths only) → review the written doc
 5. Symlink the cache so `/reload-plugins` picks up live edits:
    ```
    mkdir -p ~/.claude/plugins/cache/uncle-bob-local/uncle-bob
-   ln -s /absolute/path/to/uncle-bob ~/.claude/plugins/cache/uncle-bob-local/uncle-bob/0.1.0
+   ln -s /absolute/path/to/uncle-bob ~/.claude/plugins/cache/uncle-bob-local/uncle-bob/0.2.1
    ```
 6. Run `/reload-plugins` in Claude Code. Then restart the session — hooks are snapshotted at startup and won't engage until the next fresh session.
 
 If any of the four state files above is stale or missing, `/reload-plugins` silently skips the plugin.
 
-### From marketplace (not published yet)
-Pending publication — for now, the local-clone path above is the only route.
+### From GitHub Releases
+
+Download the latest release archive from [Releases](https://github.com/tokyo-megacorp/uncle-bob/releases) and follow the same steps above, pointing `path` and `installPath` to the extracted directory.
 
 ## Configure
 

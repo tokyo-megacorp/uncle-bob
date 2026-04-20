@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.1] — 2026-04-20 — env-var override + stop-hook burst fix
+
+### Added
+- `env var override` for uncle-bob config + balanced-tag git hook + perf benchmark
+
+### Fixed
+- `fix(stop-hook)`: diff gate + cooldown prevent per-turn burst freezing CC
+- `fix(stop-hook)`: MS_PER_SECOND constant + rename `e` → `entry` in grade-card
+- `fix(hooks)`: precompact hook output uses `systemMessage` not `hookSpecificOutput`
+
+### Changed
+- `refactor(stop-hook)`: extract `findLastCompletedEntry` — reduce nesting depth
+
 ## [0.2.0] — 2026-04-19 — Clean Architecture gate + 62s→5s stop-hook
 
 ### Added
