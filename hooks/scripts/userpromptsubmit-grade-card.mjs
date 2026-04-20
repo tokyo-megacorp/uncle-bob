@@ -8,6 +8,7 @@ import path from "node:path";
 import process from "node:process";
 
 const SENTINEL = "<!-- uncle-bob-grade-card -->";
+const LEDGER_PATH = path.join(process.env.HOME ?? "", ".uncle-bob", "smell-ledger.jsonl");
 
 function readHookInput() {
   try {
@@ -20,6 +21,19 @@ function readHookInput() {
 function scratchPathFor(sessionId) {
   const dir = path.join(process.env.HOME ?? "", ".uncle-bob", "sessions", sessionId || "_default");
   return path.join(dir, "grade-card.jsonl");
+}
+
+function appendToLedger(findings, sessionId) {
+  if (!findings.length) return;
+  const ts = new Date().toISOString();
+  const cwd = process.cwd();
+  const lines = findings.map(f =>
+    JSON.stringify({ ts, session_id: sessionId, cwd, ...f })
+  ).join("\n") + "\n";
+  try {
+    fs.mkdirSync(path.dirname(LEDGER_PATH), { recursive: true });
+    fs.appendFileSync(LEDGER_PATH, lines);
+  } catch { /* best effort */ }
 }
 
 function readFindings(scratch) {
@@ -68,6 +82,8 @@ function main() {
       additionalContext: card
     }
   }) + "\n");
+
+  appendToLedger(findings, input.session_id ?? "_default");
 
   // Clear the scratch — one delivery per batch.
   try { fs.unlinkSync(scratch); } catch { /* best effort */ }

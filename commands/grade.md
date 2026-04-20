@@ -23,7 +23,7 @@ Run a few sessions with the plugin enabled, then try again.
 
 Stop here.
 
-**2.** Run this Node.js script to parse the audit log:
+**2.** Run this Node.js script to parse both the audit log and smell ledger:
 
 ```bash
 node -e "
@@ -70,7 +70,21 @@ const avgMs     = completed.length
 const recentFails = completed.filter(e => e.ok === false).slice(-5).reverse()
   .map(e => e.reason || '(no reason recorded)');
 
-console.log(JSON.stringify({ scope, total, completed: completed.length, skipped: skipped.length, pass, fail, passRate, skipRate, avgMs, recentFails }));
+// Smell ledger — per-principle breakdown
+const ledgerPath = process.env.HOME + '/.uncle-bob/smell-ledger.jsonl';
+let smellBreakdown = [];
+try {
+  const llines = require('fs').readFileSync(ledgerPath, 'utf8').trim().split(/\r?\n/).filter(Boolean);
+  const lentries = llines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  const lfiltered = all ? lentries : lentries.filter(e => e.cwd && e.cwd.startsWith(process.cwd()));
+  const byPrinciple = {};
+  for (const e of lfiltered) {
+    byPrinciple[e.principle] = (byPrinciple[e.principle] || 0) + 1;
+  }
+  smellBreakdown = Object.entries(byPrinciple).sort((a, b) => b[1] - a[1]);
+} catch { /* ledger may not exist yet */ }
+
+console.log(JSON.stringify({ scope, total, completed: completed.length, skipped: skipped.length, pass, fail, passRate, skipRate, avgMs, recentFails, smellBreakdown }));
 " -- $ARGUMENTS
 ```
 
@@ -93,6 +107,18 @@ Recent FAILs (last ≤5):
 ```
 
 If `recentFails` is empty, print `  (none — clean session)` instead.
+
+If `smellBreakdown` is non-empty, append:
+
+```
+Tier-1 smell breakdown (all-time):
+  FunctionSize      ×14  ████████████████
+  MagicNumber       ×6   ██████
+  SingleLetterName  ×3   ███
+  ...
+```
+
+Use a proportional bar (max 16 chars). Omit section entirely if `smellBreakdown` is empty (ledger not yet populated).
 
 ## Flags
 
